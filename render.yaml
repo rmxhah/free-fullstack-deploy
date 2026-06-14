@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: your-app-name
+    env: node
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_VERSION
+        value: 20.x
+    plan: free
