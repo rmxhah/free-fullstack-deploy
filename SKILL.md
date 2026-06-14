@@ -3,9 +3,9 @@ name: free-web-deploy
 description: 免费网页测试部署 — 把带后端+数据库的网站用 Render + Supabase + GitHub Actions 零成本上线。适合原型验证、学习演示、小团队内部工具。Use when the user wants to deploy a full-stack web app for free, set up a database-backed website at zero cost, or needs a step-by-step guide to go from code to live URL without paying for a server.
 ---
 
-# 🆓 免费网页测试部署
+# 🆓 免费网页部署 Skill：不花钱，把你的网站放上互联网
 
-> 🤖 AI 生成的部署流程，已做成 Skill。对着做就行，卡住了问 AI。
+> 🤖 AI 生成的部署流程。对着做，每一步做完都有 ✅ 检查点。卡住了把这段话发给 AI。
 
 ## 这个 Skill 能干什么
 

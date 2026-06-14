@@ -1,4 +1,4 @@
-# 🆓 免费网页测试部署：Render + Supabase + GitHub Actions
+# 🆓 免费网页部署 Skill：不花钱，把你的网站放上互联网 — 架构详解
 
 ## 一句话概括
 
