@@ -1,44 +1,70 @@
-# Skill: 免费全栈部署 (Render + Supabase + GitHub)
+---
+name: free-web-deploy
+description: 免费网页测试部署 — 把带后端+数据库的网站用 Render + Supabase + GitHub Actions 零成本上线。适合原型验证、学习演示、小团队内部工具。Use when the user wants to deploy a full-stack web app for free, set up a database-backed website at zero cost, or needs a step-by-step guide to go from code to live URL without paying for a server.
+---
 
-## 元信息
-- **调用名**: `free-fullstack-deploy`
-- **用途**: 把带 Node.js 后端 + PostgreSQL 数据库的全栈应用，用完全免费的服务上线
-- **月费**: $0
-- **适用**: 原型验证、内部工具、学习项目、SaaS MVP
-- **不适用**: 纯静态网站 → 直接用 GitHub Pages
+# 🆓 免费网页测试部署
+
+> 🤖 AI 生成的部署流程，已做成 Skill。对着做就行，卡住了问 AI。
+
+## 这个 Skill 能干什么
+
+把你的项目从"本地能跑"变成"别人能访问的公网网址"，全程 $0。
+
+```
+你的电脑 → GitHub（存代码）→ Render（运行）→ 别人打开网址就能用
+                        → Supabase（存数据）
+                        → GitHub Actions（自动更新 + 防休眠）
+```
 
 ---
 
-## 它能做什么
+## 开始之前（3 个账号）
 
-给你一套"代码 push 到 GitHub → 自动上线 → 数据持久化 → 不休眠"的完整流程，替代以前"买 VPS + 配 Nginx + 配 HTTPS + 配数据库 + 写部署脚本"的繁琐操作。
+坐下来先把这三个注册好，5 分钟：
+
+| 账号 | 去哪注册 | 要什么 |
+|------|---------|--------|
+| GitHub | https://github.com → Sign up | 邮箱 + 用户名 |
+| Render | https://render.com → Sign up → **点 GitHub 图标登录** | 授权 GitHub |
+| Supabase | https://supabase.com → Sign up → **点 GitHub 图标登录** | 授权 GitHub |
+
+> ✅ 检查点：三个网站都登录着，不用关标签页。
 
 ---
 
-## 前置条件
+## Step 1：准备你的项目
 
-- [ ] GitHub 账号
-- [ ] Render 账号（用 GitHub 登录，免费 tier）
-- [ ] Supabase 账号（用 GitHub 登录，免费 tier）
-- [ ] 项目有 `npm start` 脚本，服务监听 `process.env.PORT`
+确保项目根目录有这两个文件：
 
----
+**`package.json`** — 告诉 Render "这是 Node.js 项目，怎么启动"：
 
-## Step 1：最简服务端模板
+```json
+{
+  "type": "module",
+  "scripts": { "start": "node server.mjs" },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}
+```
 
-你的 `server.mjs`（或 `server.js`）需要包含以下关键部分：
+**`server.mjs`**（或用你自己的文件名）——必须包含一个健康检查端点：
 
 ```js
 import http from "http";
-import { env } from "process";
 
-const PORT = env.PORT || 8787;
-const HOST = env.HOST || "127.0.0.1";
+const PORT = process.env.PORT || 8787;
+const HOST = process.env.HOST || "127.0.0.1";
 
-// ===== 数据库（可选，Supabase PostgreSQL）=====
+// ===== 数据库连接 =====
 import pg from "pg";
-const pool = env.DATABASE_URL
-  ? new pg.Pool({ connectionString: env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+const pool = process.env.DATABASE_URL
+  ? new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    })
   : null;
 
 async function dbQuery(text, params) {
@@ -53,7 +79,8 @@ async function initDB() {
     password_hash TEXT NOT NULL, created_at BIGINT NOT NULL)`);
   await dbQuery(`CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY, user_id TEXT NOT NULL,
-    email TEXT NOT NULL, created_at BIGINT NOT NULL, expires_at BIGINT NOT NULL)`);
+    email TEXT NOT NULL, created_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL)`);
   await dbQuery(`CREATE TABLE IF NOT EXISTS user_settings (
     user_id TEXT PRIMARY KEY, data JSONB DEFAULT '{}')`);
   await dbQuery(`CREATE TABLE IF NOT EXISTS user_conversations (
@@ -62,46 +89,53 @@ async function initDB() {
 
 // ===== HTTP 服务 =====
 const server = http.createServer(async (req, res) => {
-  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
-  if (req.method === "OPTIONS") return res.writeHead(204).end();
+  if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
-  // 健康检查（Render 需要 + 防休眠心跳用）
+  // ✅ 必须有这个端点！Render 用它判断服务是否存活
   if (req.method === "GET" && req.url === "/api/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({ ok: true }));
   }
 
-  // 你的业务路由...
+  // 你的业务路由写在这里...
 });
 
-// 启动时初始化数据库
 initDB().then(() => {
-  server.listen(PORT, HOST, () => console.log(`Listening on ${HOST}:${PORT}`));
+  server.listen(PORT, HOST, () => console.log(`http://${HOST}:${PORT}`));
 });
 ```
 
-**必装依赖**（`package.json`）:
-
-```json
-{
-  "type": "module",
-  "scripts": { "start": "node server.mjs" },
-  "engines": { "node": ">=20" },
-  "dependencies": {
-    "pg": "^8.13.0"
-  }
-}
-```
+> ✅ 检查点：`npm install && npm start` 能在本地跑起来。
 
 ---
 
-## Step 2：创建 render.yaml
+## Step 2：创建 Supabase 数据库
+
+1. 打开 https://supabase.com/dashboard → **New project**
+2. 填项目名（随便，比如 `my-app-db`）
+3. 设数据库密码 → **记下来，后面要用**
+4. Region 选离你近的（亚洲选 Singapore 或 Tokyo）
+5. 点 **Create new project** → 等 1 分钟初始化
+6. 进 **Settings → Database → Connection string** → 选 **URI** → 复制
+
+你会拿到一串这样的：
+```
+postgresql://postgres:[你的密码]@db.xxxxx.supabase.co:5432/postgres
+```
+
+> ✅ 检查点：已复制连接字符串，密码没忘。
+
+---
+
+## Step 3：创建 render.yaml
+
+项目根目录新建 `render.yaml`，内容：
 
 ```yaml
 services:
   - type: web
-    name: your-app-name          # ← 改这里
+    name: 你的项目名        # ← 改这里，英文小写+连字符，如 my-test-app
     env: node
     region: oregon
     buildCommand: npm install
@@ -115,17 +149,22 @@ services:
     plan: free
 ```
 
+> ⚠️ `HOST: 0.0.0.0` 不能改成别的，否则 Render 访问不到你的服务。
+
+> ✅ 检查点：文件已创建，`name` 已改。
+
 ---
 
-## Step 3：防休眠 — GitHub Actions
+## Step 4：添加 GitHub Actions
 
-复制到 `.github/workflows/keep-alive.yml`:
+创建两个文件：
+
+**`.github/workflows/keep-alive.yml`** — 每 14 分钟 ping 一次，防止 Render 休眠：
 
 ```yaml
 name: Keep Render Alive
 on:
   schedule:
-    # 每14分钟一次，避开整点/半点减少服务器拥挤
     - cron: '*/14 * * * *'
   workflow_dispatch:
 
@@ -135,28 +174,16 @@ jobs:
     steps:
       - name: Ping health check
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://YOUR-APP.onrender.com/api/health)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://改成你的项目名.onrender.com/api/health)
           echo "Status: $STATUS"
           if [ "$STATUS" != "200" ]; then
             echo "::warning::Health check returned $STATUS"
           fi
 ```
 
-> ⚠️ GitHub 会在仓库 60 天无提交后停用定时任务。活跃项目不受影响。
+> ⚠️ 把 `改成你的项目名` 换成 Step 3 里 `render.yaml` 的 `name`。
 
----
-
-## Step 4：自动部署
-
-**方式 A — 最简单：Render Blueprint Auto Sync**
-
-1. 打开 [Render Dashboard](https://dashboard.render.com) → 点你的 Blueprint
-2. Settings → Sync → 改为 **Automatic**
-3. 之后每次 `git push` 自动部署
-
-**方式 B — 更灵活：Deploy Hook**
-
-复制到 `.github/workflows/deploy.yml`:
+**`.github/workflows/deploy.yml`** — git push 自动部署：
 
 ```yaml
 name: Deploy to Render
@@ -174,76 +201,111 @@ jobs:
         run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
 ```
 
-然后在 GitHub 仓库 → Settings → Secrets → Actions → 添加 `RENDER_DEPLOY_HOOK`（值从 Render Dashboard → 服务 → Settings → Deploy Hooks 复制）。
+> ✅ 检查点：`.github/workflows/` 下有两个 `.yml` 文件。
 
 ---
 
-## Step 5：首次部署
-
-1. Push 代码到 GitHub
-2. Render Dashboard → **New** → **Web Service** → 连接你的 GitHub 仓库
-3. 或：**New** → **Blueprint** → 连接仓库（自动识别 `render.yaml`）
-4. 添加环境变量 `DATABASE_URL` = `postgresql://postgres:[YOUR-PASSWORD]@db.xxxxx.supabase.co:5432/postgres`（⚠️ 在 Render Dashboard 手动加，**不要写进 render.yaml 或任何文件**）
-5. 等 2-5 分钟部署完成
-
----
-
-## Step 6：验证
+## Step 5：推到 GitHub 并首次部署
 
 ```bash
-# 健康检查
-curl https://your-app.onrender.com/api/health
-# → {"ok":true}
-
-# 查看日志
-# Render Dashboard → 服务 → Logs
-
-# 验证数据库
-# Supabase Dashboard → SQL Editor → SELECT * FROM users;
+git add .
+git commit -m "初次部署"
+git push origin main
 ```
+
+然后去 Render 部署：
+
+1. 打开 https://dashboard.render.com → **New** → **Blueprint**
+2. 连接你的 GitHub 仓库 → Render 自动识别 `render.yaml`
+3. 点 **Apply** → 等 3-5 分钟
+
+> ✅ 检查点：Render Dashboard 里服务状态是 **Live**（绿色）。
 
 ---
 
-## 升级路径
+## Step 6：绑定数据库（关键一步）
 
-| 阶段 | 方案 | 月费 |
+部署成功后，把 Supabase 数据库连上：
+
+1. Render Dashboard → 点你的服务 → **Environment**
+2. 添加一行：
+   | Key | Value |
+   |-----|-------|
+   | `DATABASE_URL` | Step 2 复制的那串 `postgresql://...` |
+3. 点 **Save** → Render 会自动重启服务
+
+> ⚠️ **绝对不要把 `DATABASE_URL` 写进代码或 render.yaml！** 密码会在 GitHub 上被所有人看到。
+> 
+> ✅ 检查点：服务重启后，打开 `https://你的项目名.onrender.com/api/health` 看到 `{"ok":true}`。
+
+---
+
+## Step 7：开启自动部署
+
+1. Render Dashboard → 点你的 Blueprint → **Settings**
+2. **Sync** → 改为 **Automatic**
+3. 之后每次 `git push`，Render 自动更新
+
+如果不行（比如没 Blueprint），手动配 Deploy Hook：
+
+1. Render Dashboard → 服务 → **Settings** → **Deploy Hooks** → 复制 URL
+2. GitHub 仓库 → **Settings** → **Secrets → Actions** → 添加 `RENDER_DEPLOY_HOOK`，粘贴刚才的 URL
+
+> ✅ 检查点：改一行代码 → git push → Render 自动开始部署。
+
+---
+
+## 最终验证清单
+
+- [ ] 浏览器打开 `https://你的项目名.onrender.com` 能访问
+- [ ] `https://你的项目名.onrender.com/api/health` 返回 `{"ok":true}`
+- [ ] 等 15 分钟不操作 → 再次打开仍然秒开（心跳生效）
+- [ ] Supabase Dashboard → SQL Editor → `SELECT * FROM users;` 有数据
+
+---
+
+## ⚠️ 免费限制
+
+| 服务 | 免费额度 | 坑 |
+|------|---------|-----|
+| Render | 750 小时/月，512MB 内存 | 15 分钟没人访问就休眠（本方案用心跳解决）；磁盘是临时的，重启就清空 |
+| Supabase | 500MB 数据库 | 90 天不活跃项目会被暂停（会邮件提醒） |
+| GitHub Actions | 2000 分钟/月 | 仓库 60 天无提交，定时任务自动停 |
+
+---
+
+## 常见故障
+
+| 症状 | 原因 | 解决 |
 |------|------|------|
-| MVP / 个人项目 | 本方案 | **$0** |
-| 有稳定用户 | Render Starter + Supabase Pro | ~$32/mo |
-| 商业产品 | Render Standard + Supabase Team | ~$100+/mo |
+| 部署完打不开，404 | `HOST` 没设 `0.0.0.0` | 检查 render.yaml envVars |
+| 打开要等 30-60 秒 | Render 休眠了 | 等 14 分钟让心跳生效 |
+| 存的数据重启就没了 | 没配 `DATABASE_URL`，数据写到 Render 磁盘了 | 去 Render Environment 加上 `DATABASE_URL` |
+| `pg` 连不上 | Supabase 默认 SSL 连接 | 代码里 `ssl: { rejectUnauthorized: false }` |
+| `git push` 但不自动部署 | 没用 SSH remote 或 Blueprint 没开 Auto Sync | `git remote set-url origin git@github.com:...` |
 
 ---
 
-## 常见坑
+## 如何安装这个 Skill
 
-| 坑 | 原因 | 解决 |
-|---|------|------|
-| 部署后访问 404 | 服务监听 127.0.0.1 而非 0.0.0.0 | `HOST` 环境变量设为 `0.0.0.0` |
-| 首次访问等 30-60s | 免费 tier 休眠 | 等 GitHub Actions 心跳生效（14 分钟内） |
-| 数据隔天就没了 | 用了 Render 本地磁盘而非 Supabase | 确保 `DATABASE_URL` 已配，代码优先走 pg |
-| `pg` 连接报错 | SSL 未配置 | `ssl: { rejectUnauthorized: false }` |
-| GitHub Actions 不触发 | 60 天无提交被停用 | Push 任意 commit 重新激活 |
-| Supabase 连不上 | IP 未加白名单 | Supabase Settings → 关闭 IP 限制或加 Render IP |
-
----
-
-## 复制到新项目
+### 方法 1：直接复制文件到你项目
 
 ```bash
-# 复制核心部署文件
-cp render.yaml .github/workflows/keep-alive.yml .github/workflows/deploy.yml 目标项目/
-
-# 修改点：
-# 1. render.yaml 里的 name
-# 2. keep-alive.yml 里的 YOUR-APP.onrender.com
-# 3. 确保 server 有 /api/health 端点
-# 4. 确保 server 用 DATABASE_URL 连接数据库
+# 在你的项目根目录
+cp render.yaml .github/workflows/keep-alive.yml .github/workflows/deploy.yml 你的项目路径/
 ```
+
+然后改 `render.yaml` 的 `name` 和 `keep-alive.yml` 的 URL。
+
+### 方法 2：让 AI 按这个流程帮你
+
+把 https://github.com/rmxhah/free-fullstack-deploy 发给 Claude，说"按这个 SKILL 帮我部署"。
 
 ---
 
 ## 相关链接
 
-- Render: https://render.com
-- Supabase: https://supabase.com
-- GitHub Actions 文档: https://docs.github.com/en/actions
+- 本模板仓库：https://github.com/rmxhah/free-fullstack-deploy
+- Render：https://render.com
+- Supabase：https://supabase.com
+- GitHub Actions：https://docs.github.com/en/actions

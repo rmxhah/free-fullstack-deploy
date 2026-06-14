@@ -1,4 +1,4 @@
-# 🏗️ 免费全栈部署方案：Render + Supabase + GitHub Actions
+# 🆓 免费网页测试部署：Render + Supabase + GitHub Actions
 
 ## 一句话概括
 
